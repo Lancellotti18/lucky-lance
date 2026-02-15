@@ -57,6 +57,20 @@ export interface HandOddsEntry {
   currentlyHave: boolean;
 }
 
+export interface BeatingHandGroup {
+  handName: string;
+  combos: number;
+  probability: number;
+  exampleHoldings: [Card, Card][];
+}
+
+export interface WhatBeatsMeResult {
+  beatingGroups: BeatingHandGroup[];
+  totalBeatingCombos: number;
+  totalPossibleCombos: number;
+  beatingProbability: number;
+}
+
 export interface HandStrengthResult {
   category: "premium" | "strong" | "good" | "marginal" | "weak" | "trash";
   label: string;
@@ -80,6 +94,7 @@ export interface AnalysisResult {
   recommendedAction: Action;
   topActions: ActionOption[];
   handOdds: HandOddsEntry[];
+  whatBeatsMe: WhatBeatsMeResult;
   explanation: string;
   handName: string;
   improvedHandName: string | null;

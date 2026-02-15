@@ -10,6 +10,7 @@ import { generateExplanation } from "@/engine/strategy-templates";
 import { getHandName } from "@/engine/hand-evaluator";
 import { getStreet } from "@/engine/deck";
 import { analyzeHandStrength } from "@/engine/hand-strength";
+import { analyzeWhatBeatsMe } from "@/engine/what-beats-me";
 
 export async function POST(request: NextRequest) {
   try {
@@ -97,6 +98,9 @@ export async function POST(request: NextRequest) {
     // Calculate hand improvement probabilities
     const handOdds = calculateHandOdds(holeCards, boardCards, variant, 5000);
 
+    // Analyze what opponent hands beat us on the current board
+    const whatBeatsMe = analyzeWhatBeatsMe(holeCards, boardCards, variant);
+
     // Build analysis result
     const result: AnalysisResult = {
       holeCards,
@@ -110,6 +114,7 @@ export async function POST(request: NextRequest) {
       recommendedAction: recommendation.action,
       topActions,
       handOdds,
+      whatBeatsMe,
       handName,
       improvedHandName,
       explanation: "", // Will be filled below

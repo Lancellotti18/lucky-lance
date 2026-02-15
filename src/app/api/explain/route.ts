@@ -36,7 +36,7 @@ Recommended action: ${recommendedAction || "unknown"}
 Explain why this action is correct and what the player should consider.`;
 
     const response = await openai.chat.completions.create({
-      model: "grok-2-latest",
+      model: "grok-3-mini",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },

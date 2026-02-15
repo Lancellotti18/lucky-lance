@@ -6,12 +6,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { handImage, boardImage, holeCount = 2 } = body;
 
-    if (!handImage || typeof handImage !== "string") {
+    if (!handImage && !boardImage) {
       return NextResponse.json(
         {
-          error: "No hand image provided. Please upload a photo of your hole cards.",
-          code: "MISSING_HAND_IMAGE",
+          error: "No image provided. Please upload a photo of your cards.",
+          code: "MISSING_IMAGE",
         },
+        { status: 400 }
+      );
+    }
+
+    if (handImage && typeof handImage !== "string") {
+      return NextResponse.json(
+        { error: "Invalid hand image format", code: "INVALID_IMAGE" },
         { status: 400 }
       );
     }
@@ -24,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await recognizeCards(
-      handImage,
+      handImage || null,
       boardImage || null,
       holeCount
     );

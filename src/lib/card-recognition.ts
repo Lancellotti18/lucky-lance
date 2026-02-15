@@ -116,11 +116,49 @@ async function recognizeSingleImage(
 }
 
 export async function recognizeCards(
-  handImage: string,
+  handImage: string | null,
   boardImage: string | null,
   holeCount: number = 2
 ): Promise<RecognitionResult> {
   try {
+    // Board-only mode: skip hole card recognition
+    if (!handImage && boardImage) {
+      const boardResult = await recognizeSingleImage(
+        boardImage,
+        "board",
+        holeCount
+      );
+
+      if (boardResult.cards.length === 0 || boardResult.confidence === "low") {
+        return {
+          holeCards: [],
+          boardCards: [],
+          confidence: "low",
+          ambiguous: true,
+          message:
+            boardResult.notes ||
+            "Could not clearly identify the board cards. Please retake the photo with all board cards fully visible.",
+        };
+      }
+
+      return {
+        holeCards: [],
+        boardCards: boardResult.cards,
+        confidence: boardResult.confidence as "high" | "medium" | "low",
+        ambiguous: false,
+      };
+    }
+
+    if (!handImage) {
+      return {
+        holeCards: [],
+        boardCards: [],
+        confidence: "low",
+        ambiguous: true,
+        message: "No image provided.",
+      };
+    }
+
     // Recognize hole cards from the first image
     const handResult = await recognizeSingleImage(handImage, "hand", holeCount);
 

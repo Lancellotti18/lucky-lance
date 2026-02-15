@@ -28,6 +28,8 @@ export default function AppShell() {
     clearCapturedImages,
     isAnalyzing,
     setAnalyzing,
+    isAddingBoardCards,
+    setIsAddingBoardCards,
     error,
     setError,
     reset,
@@ -98,67 +100,119 @@ export default function AppShell() {
   const handleRecognizeAndAnalyze = useCallback(async () => {
     if (capturedImages.length === 0) return;
 
+    const addingBoard = useUIStore.getState().isAddingBoardCards;
+
     setError(null);
     setScreen("loading");
     setAnalyzing(true);
 
     try {
-      // Image 1 = hole cards, Image 2 = board (optional)
-      const handImageRaw = capturedImages[0];
-      const boardImageRaw = capturedImages.length >= 2 ? capturedImages[1] : null;
-
-      // Preprocess images client-side for better recognition
-      const { enhancedDataUrl: handImage } = await preprocessCardImage(handImageRaw);
-      const boardImage = boardImageRaw
-        ? (await preprocessCardImage(boardImageRaw)).enhancedDataUrl
-        : null;
-
       const holeCount = variant === "omaha" || variant === "omahaHiLo" ? 4 : 2;
 
-      // Recognize cards: hand and board are processed separately
-      const response = await fetch("/api/recognize-cards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ handImage, boardImage, holeCount }),
-      });
+      if (addingBoard) {
+        // Board-only mode: recognize just the board image
+        const boardImageRaw = capturedImages[0];
+        const { enhancedDataUrl: boardImage } = await preprocessCardImage(boardImageRaw);
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Card recognition failed");
-      }
+        const response = await fetch("/api/recognize-cards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ boardImage, holeCount }),
+        });
 
-      const recognition = await response.json();
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || "Card recognition failed");
+        }
 
-      if (recognition.ambiguous) {
-        setError(
-          recognition.message ||
-            "Could not identify cards clearly. Please retake the photo."
+        const recognition = await response.json();
+
+        if (recognition.ambiguous) {
+          setError(
+            recognition.message ||
+              "Could not identify board cards clearly. Please retake the photo."
+          );
+          setScreen("preview");
+          setAnalyzing(false);
+          return;
+        }
+
+        // Filter out cards we already know to find the new ones
+        const existingHole = useGameStore.getState().holeCards;
+        const existingBoard = useGameStore.getState().boardCards;
+        const knownCards = new Set([...existingHole, ...existingBoard]);
+        const newCards = (recognition.boardCards as Card[]).filter(
+          (c) => !knownCards.has(c)
         );
-        setScreen("preview");
-        setAnalyzing(false);
-        return;
-      }
 
-      const detectedHole: Card[] = recognition.holeCards;
-      const detectedBoard: Card[] = recognition.boardCards;
+        if (newCards.length === 0) {
+          setError("No new cards detected. Make sure the new card is visible in the photo.");
+          setScreen("preview");
+          setAnalyzing(false);
+          return;
+        }
 
-      setHoleCards(detectedHole);
-      setBoardCards(detectedBoard);
+        const updatedBoard = [...existingBoard, ...newCards];
+        setBoardCards(updatedBoard);
+        setIsAddingBoardCards(false);
 
-      // Go to pot odds input if board is detected
-      if (detectedBoard.length > 0) {
+        // Go to pot odds input for the new street
         setAnalyzing(false);
         setScreen("potInput");
       } else {
-        // No board - analyze directly (preflop)
-        await runAnalysis(detectedHole, detectedBoard);
+        // Normal mode: Image 1 = hole cards, Image 2 = board (optional)
+        const handImageRaw = capturedImages[0];
+        const boardImageRaw = capturedImages.length >= 2 ? capturedImages[1] : null;
+
+        const { enhancedDataUrl: handImage } = await preprocessCardImage(handImageRaw);
+        const boardImage = boardImageRaw
+          ? (await preprocessCardImage(boardImageRaw)).enhancedDataUrl
+          : null;
+
+        const response = await fetch("/api/recognize-cards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ handImage, boardImage, holeCount }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || "Card recognition failed");
+        }
+
+        const recognition = await response.json();
+
+        if (recognition.ambiguous) {
+          setError(
+            recognition.message ||
+              "Could not identify cards clearly. Please retake the photo."
+          );
+          setScreen("preview");
+          setAnalyzing(false);
+          return;
+        }
+
+        const detectedHole: Card[] = recognition.holeCards;
+        const detectedBoard: Card[] = recognition.boardCards;
+
+        setHoleCards(detectedHole);
+        setBoardCards(detectedBoard);
+
+        // Go to pot odds input if board is detected
+        if (detectedBoard.length > 0) {
+          setAnalyzing(false);
+          setScreen("potInput");
+        } else {
+          // No board - analyze directly (preflop)
+          await runAnalysis(detectedHole, detectedBoard);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed");
       setScreen("preview");
       setAnalyzing(false);
     }
-  }, [capturedImages, variant, setScreen, setAnalyzing, setError, setHoleCards, setBoardCards]);
+  }, [capturedImages, variant, setScreen, setAnalyzing, setError, setHoleCards, setBoardCards, setIsAddingBoardCards]);
 
   const runAnalysis = useCallback(
     async (hole: Card[], board: Card[]) => {
@@ -215,12 +269,20 @@ export default function AppShell() {
     runAnalysis(holeCards, boardCards);
   }, [holeCards, boardCards, runAnalysis]);
 
+  const handleNextStreet = useCallback(() => {
+    clearCapturedImages();
+    setIsAddingBoardCards(true);
+    setError(null);
+    setScreen("preview");
+  }, [clearCapturedImages, setIsAddingBoardCards, setError, setScreen]);
+
   const handleNewHand = useCallback(() => {
     resetHand();
     clearCapturedImages();
+    setIsAddingBoardCards(false);
     setError(null);
     setScreen("main");
-  }, [resetHand, clearCapturedImages, setError, setScreen]);
+  }, [resetHand, clearCapturedImages, setIsAddingBoardCards, setError, setScreen]);
 
   return (
     <div className="min-h-screen bg-casino-black">
@@ -408,6 +470,7 @@ export default function AppShell() {
                   <ResultsScreen
                     result={analysisResult}
                     onNewHand={handleNewHand}
+                    onNextStreet={handleNextStreet}
                     aiExplanationLoading={aiExplanationLoading}
                   />
                 </motion.div>

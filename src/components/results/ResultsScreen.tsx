@@ -8,6 +8,7 @@ import OutsDisplay from "./OutsDisplay";
 import PotOddsDisplay from "./PotOddsDisplay";
 import ActionRecommendation from "./ActionRecommendation";
 import HandOddsDisplay from "./HandOddsDisplay";
+import WhatBeatsMeDisplay from "./WhatBeatsMeDisplay";
 import StrategyExplanation from "./StrategyExplanation";
 import Button from "@/components/ui/Button";
 import { useGameStore } from "@/stores/game-store";
@@ -15,12 +16,14 @@ import { useGameStore } from "@/stores/game-store";
 interface ResultsScreenProps {
   result: AnalysisResult;
   onNewHand: () => void;
+  onNextStreet: () => void;
   aiExplanationLoading?: boolean;
 }
 
 export default function ResultsScreen({
   result,
   onNewHand,
+  onNextStreet,
   aiExplanationLoading = false,
 }: ResultsScreenProps) {
   const { potSize, amountToCall } = useGameStore();
@@ -62,6 +65,9 @@ export default function ResultsScreen({
       {/* Equity */}
       <EquityDisplay equity={result.equity} />
 
+      {/* What Beats You */}
+      <WhatBeatsMeDisplay whatBeatsMe={result.whatBeatsMe} />
+
       {/* Outs */}
       <OutsDisplay
         outs={result.outs}
@@ -89,10 +95,22 @@ export default function ResultsScreen({
         isLoading={aiExplanationLoading}
       />
 
-      {/* New Hand Button */}
-      <Button fullWidth size="lg" onClick={onNewHand} className="mt-2">
-        Analyze New Hand
-      </Button>
+      {/* Action Buttons */}
+      <div className="flex flex-col gap-3 mt-2">
+        {result.boardCards.length >= 3 && result.boardCards.length < 5 && (
+          <Button fullWidth size="lg" onClick={onNextStreet}>
+            {result.boardCards.length === 3 ? "Deal the Turn" : "Deal the River"}
+          </Button>
+        )}
+        <Button
+          variant={result.boardCards.length >= 3 && result.boardCards.length < 5 ? "secondary" : "primary"}
+          fullWidth
+          size="lg"
+          onClick={onNewHand}
+        >
+          Analyze New Hand
+        </Button>
+      </div>
     </motion.div>
   );
 }

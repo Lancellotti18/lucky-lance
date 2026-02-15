@@ -8,6 +8,7 @@ interface UIState {
   isNavOpen: boolean;
   capturedImages: string[];
   isAnalyzing: boolean;
+  isAddingBoardCards: boolean;
   error: string | null;
 
   setScreen: (s: AppScreen) => void;
@@ -17,6 +18,7 @@ interface UIState {
   removeCapturedImage: (index: number) => void;
   clearCapturedImages: () => void;
   setAnalyzing: (analyzing: boolean) => void;
+  setIsAddingBoardCards: (v: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
 }
@@ -26,6 +28,7 @@ export const useUIStore = create<UIState>((set) => ({
   isNavOpen: false,
   capturedImages: [],
   isAnalyzing: false,
+  isAddingBoardCards: false,
   error: null,
 
   setScreen: (screen) => set({ screen }),
@@ -41,12 +44,14 @@ export const useUIStore = create<UIState>((set) => ({
     })),
   clearCapturedImages: () => set({ capturedImages: [] }),
   setAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
+  setIsAddingBoardCards: (isAddingBoardCards) => set({ isAddingBoardCards }),
   setError: (error) => set({ error }),
   reset: () =>
     set({
       screen: "main",
       capturedImages: [],
       isAnalyzing: false,
+      isAddingBoardCards: false,
       error: null,
     }),
 }));
