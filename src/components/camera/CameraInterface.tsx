@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useCamera } from "@/hooks/useCamera";
 import { useUIStore } from "@/stores/ui-store";
 import Button from "@/components/ui/Button";
@@ -10,16 +10,19 @@ export default function CameraInterface() {
     useCamera();
   const { addCapturedImage, setScreen } = useUIStore();
   const mountedRef = useRef(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     mountedRef.current = true;
-    startCamera();
+    // Only start the browser camera if the API is available (requires HTTPS on mobile)
+    if (isSupported) {
+      startCamera();
+    }
 
     return () => {
       mountedRef.current = false;
       stopCamera();
     };
-    // Run once on mount/unmount only
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -32,12 +35,46 @@ export default function CameraInterface() {
     }
   };
 
-  if (error) {
+  // Native file input fallback — opens the device camera on iOS/Android
+  const handleNativeCapture = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const result = ev.target?.result as string;
+        if (result) {
+          // Compress before storing
+          compressImage(result).then((compressed) => {
+            addCapturedImage(compressed);
+            setScreen("preview");
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    },
+    [addCapturedImage, setScreen]
+  );
+
+  // If camera API isn't supported (HTTP on mobile), show native capture fallback
+  if (!isSupported || error) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 text-center">
-        <div className="w-16 h-16 mb-4 rounded-full bg-casino-red/10 flex items-center justify-center">
+      <div className="flex flex-col items-center justify-center p-8 text-center gap-5">
+        {/* Hidden native camera input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleNativeCapture}
+          className="hidden"
+        />
+
+        <div className="w-16 h-16 rounded-full bg-casino-blue/10 flex items-center justify-center">
           <svg
-            className="w-8 h-8 text-casino-red"
+            className="w-8 h-8 text-casino-blue"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -46,13 +83,74 @@ export default function CameraInterface() {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
         </div>
-        <p className="text-casino-text mb-2 font-medium">{error}</p>
-        <Button variant="secondary" onClick={() => setScreen("main")} className="mt-4">
-          Go Back
+
+        <div>
+          <p className="text-casino-text mb-1 font-medium">Take a Photo</p>
+          <p className="text-casino-muted text-sm">
+            Tap below to open your camera and snap a photo of your cards.
+          </p>
+        </div>
+
+        <Button
+          fullWidth
+          size="lg"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <svg
+            className="w-5 h-5 mr-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+          Open Camera
+        </Button>
+
+        <Button
+          variant="secondary"
+          fullWidth
+          onClick={() => setScreen("preview")}
+        >
+          <svg
+            className="w-5 h-5 mr-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+            />
+          </svg>
+          Upload from Gallery
+        </Button>
+
+        <Button variant="ghost" onClick={() => setScreen("main")}>
+          Cancel
         </Button>
       </div>
     );
@@ -100,4 +198,37 @@ export default function CameraInterface() {
       </Button>
     </div>
   );
+}
+
+async function compressImage(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const maxDim = 1024;
+      let { width, height } = img;
+
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = (height / width) * maxDim;
+          width = maxDim;
+        } else {
+          width = (width / height) * maxDim;
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      } else {
+        resolve(dataUrl);
+      }
+    };
+    img.src = dataUrl;
+  });
 }
