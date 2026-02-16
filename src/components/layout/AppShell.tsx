@@ -13,6 +13,7 @@ import CameraInterface from "@/components/camera/CameraInterface";
 import PhotoUpload from "@/components/camera/PhotoUpload";
 import ImagePreview from "@/components/camera/ImagePreview";
 import PotOddsInput from "@/components/input/PotOddsInput";
+import ManualCardInput from "@/components/input/CardSelector";
 import AnalysisLoader from "@/components/loading/AnalysisLoader";
 import ResultsScreen from "@/components/results/ResultsScreen";
 import Button from "@/components/ui/Button";
@@ -284,6 +285,36 @@ export default function AppShell() {
     setScreen("main");
   }, [resetHand, clearCapturedImages, setIsAddingBoardCards, setError, setScreen]);
 
+  const handleManualSubmit = useCallback(
+    (manualHole: Card[], manualBoard: Card[]) => {
+      setHoleCards(manualHole);
+      setBoardCards(manualBoard);
+      setIsAddingBoardCards(false);
+
+      if (manualBoard.length > 0) {
+        setScreen("potInput");
+      } else {
+        runAnalysis(manualHole, manualBoard);
+      }
+    },
+    [setHoleCards, setBoardCards, setIsAddingBoardCards, setScreen, runAnalysis]
+  );
+
+  const handleManualCancel = useCallback(() => {
+    if (isAddingBoardCards) {
+      setIsAddingBoardCards(false);
+      setScreen("results");
+    } else {
+      setScreen("main");
+    }
+  }, [isAddingBoardCards, setIsAddingBoardCards, setScreen]);
+
+  const handleNextStreetManual = useCallback(() => {
+    setIsAddingBoardCards(true);
+    setError(null);
+    setScreen("manualInput");
+  }, [setIsAddingBoardCards, setError, setScreen]);
+
   return (
     <div className="min-h-screen bg-casino-black">
       {/* Launch Screen */}
@@ -357,38 +388,61 @@ export default function AppShell() {
                   )}
 
                   {/* Action buttons */}
-                  <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
-                    <Button
-                      fullWidth
-                      size="lg"
-                      onClick={() => setScreen("camera")}
-                    >
-                      <svg
-                        className="w-5 h-5 mr-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                  <div className="flex flex-col gap-3 w-full max-w-md">
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button
+                        fullWidth
+                        size="lg"
+                        onClick={() => setScreen("camera")}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                        />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                        />
-                      </svg>
-                      Take Live Photo
-                    </Button>
+                        <svg
+                          className="w-5 h-5 mr-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                        Take Live Photo
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        fullWidth
+                        size="lg"
+                        onClick={() => setScreen("preview")}
+                      >
+                        <svg
+                          className="w-5 h-5 mr-2"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                          />
+                        </svg>
+                        Upload Photos
+                      </Button>
+                    </div>
                     <Button
                       variant="secondary"
                       fullWidth
                       size="lg"
-                      onClick={() => setScreen("preview")}
+                      onClick={() => setScreen("manualInput")}
                     >
                       <svg
                         className="w-5 h-5 mr-2"
@@ -400,10 +454,10 @@ export default function AppShell() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                         />
                       </svg>
-                      Upload Photos
+                      Manual Input
                     </Button>
                   </div>
                 </motion.div>
@@ -458,6 +512,25 @@ export default function AppShell() {
                 </motion.div>
               )}
 
+              {/* Manual Card Input */}
+              {screen === "manualInput" && (
+                <motion.div
+                  key="manualInput"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-8"
+                >
+                  <ManualCardInput
+                    onSubmit={handleManualSubmit}
+                    onCancel={handleManualCancel}
+                    boardOnly={isAddingBoardCards}
+                    existingHoleCards={isAddingBoardCards ? holeCards : undefined}
+                    existingBoardCards={isAddingBoardCards ? boardCards : undefined}
+                  />
+                </motion.div>
+              )}
+
               {/* Results Screen */}
               {screen === "results" && analysisResult && (
                 <motion.div
@@ -471,6 +544,7 @@ export default function AppShell() {
                     result={analysisResult}
                     onNewHand={handleNewHand}
                     onNextStreet={handleNextStreet}
+                    onNextStreetManual={handleNextStreetManual}
                     aiExplanationLoading={aiExplanationLoading}
                   />
                 </motion.div>

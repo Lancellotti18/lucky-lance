@@ -108,7 +108,8 @@ export type AppScreen =
   | "preview"
   | "potInput"
   | "loading"
-  | "results";
+  | "results"
+  | "manualInput";
 
 export const VARIANT_LABELS: Record<PokerVariant, string> = {
   texasHoldem: "Texas Hold'em",

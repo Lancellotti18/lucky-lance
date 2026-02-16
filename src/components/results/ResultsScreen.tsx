@@ -17,6 +17,7 @@ interface ResultsScreenProps {
   result: AnalysisResult;
   onNewHand: () => void;
   onNextStreet: () => void;
+  onNextStreetManual: () => void;
   aiExplanationLoading?: boolean;
 }
 
@@ -24,6 +25,7 @@ export default function ResultsScreen({
   result,
   onNewHand,
   onNextStreet,
+  onNextStreetManual,
   aiExplanationLoading = false,
 }: ResultsScreenProps) {
   const { potSize, amountToCall } = useGameStore();
@@ -98,9 +100,19 @@ export default function ResultsScreen({
       {/* Action Buttons */}
       <div className="flex flex-col gap-3 mt-2">
         {result.boardCards.length >= 3 && result.boardCards.length < 5 && (
-          <Button fullWidth size="lg" onClick={onNextStreet}>
-            {result.boardCards.length === 3 ? "Deal the Turn" : "Deal the River"}
-          </Button>
+          <>
+            <span className="text-casino-muted text-xs uppercase tracking-wider text-center">
+              {result.boardCards.length === 3 ? "Deal the Turn" : "Deal the River"}
+            </span>
+            <div className="flex gap-3">
+              <Button fullWidth size="lg" onClick={onNextStreet}>
+                Photo
+              </Button>
+              <Button fullWidth size="lg" onClick={onNextStreetManual}>
+                Manual
+              </Button>
+            </div>
+          </>
         )}
         <Button
           variant={result.boardCards.length >= 3 && result.boardCards.length < 5 ? "secondary" : "primary"}
