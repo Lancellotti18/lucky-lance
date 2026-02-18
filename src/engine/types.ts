@@ -1,3 +1,16 @@
+export type Position = "UTG" | "MP" | "CO" | "BTN" | "SB" | "BB";
+
+export const POSITIONS: Position[] = ["UTG", "MP", "CO", "BTN", "SB", "BB"];
+
+export const POSITION_LABELS: Record<Position, string> = {
+  UTG: "Under the Gun",
+  MP: "Middle Position",
+  CO: "Cutoff",
+  BTN: "Button",
+  SB: "Small Blind",
+  BB: "Big Blind",
+};
+
 export type Suit = "h" | "d" | "c" | "s";
 export type Rank =
   | "2"

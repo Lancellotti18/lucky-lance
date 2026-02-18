@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Card, PokerVariant, AnalysisResult } from "@/engine/types";
+import type { Card, PokerVariant, AnalysisResult, Position } from "@/engine/types";
 import { validateCards } from "@/engine/validation";
 import { calculateEquity } from "@/engine/equity-calculator";
 import { calculateOuts, getTotalOuts } from "@/engine/outs-calculator";
@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
       potSize,
       amountToCall,
       gtoMode = false,
+      position = null,
+      numPlayers = 2,
     } = body as {
       holeCards: Card[];
       boardCards: Card[];
@@ -29,6 +31,8 @@ export async function POST(request: NextRequest) {
       potSize?: number;
       amountToCall?: number;
       gtoMode?: boolean;
+      position?: Position | null;
+      numPlayers?: number;
     };
 
     // Validate cards
@@ -43,8 +47,9 @@ export async function POST(request: NextRequest) {
     // Determine street
     const street = getStreet(boardCards);
 
-    // Calculate equity (Monte Carlo)
-    const equity = calculateEquity(holeCards, boardCards, variant);
+    // Calculate equity (Monte Carlo) with multi-opponent support
+    const numOpponents = Math.max(1, numPlayers - 1);
+    const equity = calculateEquity(holeCards, boardCards, variant, 5000, numOpponents);
 
     // Calculate outs
     const outs = calculateOuts(holeCards, boardCards, variant);
@@ -59,14 +64,15 @@ export async function POST(request: NextRequest) {
     // Analyze hand strength (overpairs, nut flushes, etc.)
     const hsInfo = analyzeHandStrength(holeCards, boardCards, variant, outs);
 
-    // Get GTO recommendation (hand-strength-aware)
+    // Get GTO recommendation (hand-strength-aware, position-aware)
     const recommendation = getRecommendation(
       equity,
       potOdds,
       street,
       outs,
       totalClean,
-      hsInfo
+      hsInfo,
+      position
     );
 
     // Get hand name
@@ -92,8 +98,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get top 3 GTO actions (hand-strength-aware)
-    const topActions = getTopActions(equity, potOdds, street, totalClean, hsInfo);
+    // Get top 3 GTO actions (hand-strength-aware, position-aware)
+    const topActions = getTopActions(equity, potOdds, street, totalClean, hsInfo, position);
 
     // Calculate hand improvement probabilities
     const handOdds = calculateHandOdds(holeCards, boardCards, variant, 5000);

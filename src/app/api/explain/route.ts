@@ -16,6 +16,8 @@ export async function POST(request: NextRequest) {
       potOdds,
       recommendedAction,
       handName,
+      position,
+      numPlayers,
     } = body;
 
     const outsDescription =
@@ -23,8 +25,13 @@ export async function POST(request: NextRequest) {
         ? outs.map((o: { type: string; count: number }) => `${o.type}: ${o.count}`).join(", ")
         : "None";
 
+    const positionLine = position ? `Position: ${position}` : "";
+    const playersLine = numPlayers ? `Players remaining: ${numPlayers}` : "";
+
     const userPrompt = `Game: ${variant}
 Street: ${street}
+${positionLine}
+${playersLine}
 Hole cards: ${holeCards?.join(", ") || "unknown"}
 Board: ${boardCards?.join(", ") || "none"}
 Current hand: ${handName || "unknown"}
@@ -33,7 +40,7 @@ Pot odds: ${potOdds != null ? (potOdds * 100).toFixed(1) + "%" : "N/A"}
 Outs: ${outsDescription}
 Recommended action: ${recommendedAction || "unknown"}
 
-Explain why this action is correct and what the player should consider.`;
+Explain why this action is correct and what the player should consider.${position ? ` Factor in the player's ${position} position.` : ""}${numPlayers ? ` Consider that there are ${numPlayers} players still in the hand.` : ""}`;
 
     const response = await openai.chat.completions.create({
       model: "grok-3-mini",

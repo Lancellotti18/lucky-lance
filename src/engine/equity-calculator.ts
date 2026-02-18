@@ -6,7 +6,8 @@ export function calculateEquity(
   holeCards: Card[],
   boardCards: Card[],
   variant: PokerVariant = "texasHoldem",
-  numSimulations: number = 20000
+  numSimulations: number = 5000,
+  numOpponents: number = 1
 ): number {
   const knownCards = [...holeCards, ...boardCards];
   const baseDeck = createDeck(variant);
@@ -20,40 +21,63 @@ export function calculateEquity(
   for (let i = 0; i < numSimulations; i++) {
     const shuffled = shuffle(remainingDeck);
 
-    // Deal opponent hole cards
-    const { dealt: oppHole, remaining: afterOpp } = deal(shuffled, oppHoleCount);
+    // Deal all opponents' hole cards
+    let deckCursor = 0;
+    const oppHands: Card[][] = [];
+    for (let o = 0; o < numOpponents; o++) {
+      oppHands.push(shuffled.slice(deckCursor, deckCursor + oppHoleCount));
+      deckCursor += oppHoleCount;
+    }
 
     // Complete the board
-    const { dealt: runout } = deal(afterOpp, cardsToComplete);
+    const runout = shuffled.slice(deckCursor, deckCursor + cardsToComplete);
     const fullBoard = [...boardCards, ...runout];
 
     try {
       const heroResult = evaluateHand(holeCards, fullBoard, variant);
-      const oppResult = evaluateHand(oppHole, fullBoard, variant);
 
-      if (heroResult.rank > oppResult.rank) {
-        heroWins++;
-      } else if (heroResult.rank === oppResult.rank) {
-        // Same hand rank, compare descriptions for kicker resolution
-        // pokersolver's winners function handles this properly
-        const Hand = require("pokersolver").Hand;
-        const h1 = Hand.solve(
-          [...holeCards, ...fullBoard].map(cardToPS),
-          getGameType(variant)
-        );
-        const h2 = Hand.solve(
-          [...oppHole, ...fullBoard].map(cardToPS),
-          getGameType(variant)
-        );
-        const winners = Hand.winners([h1, h2]);
-        if (winners.length === 2) {
-          ties++;
-        } else if (winners[0] === h1) {
-          heroWins++;
+      let heroBeatAll = true;
+      let allTied = true;
+
+      for (const oppHole of oppHands) {
+        const oppResult = evaluateHand(oppHole, fullBoard, variant);
+
+        if (heroResult.rank < oppResult.rank) {
+          heroBeatAll = false;
+          allTied = false;
+          break;
+        } else if (heroResult.rank === oppResult.rank) {
+          // Kicker comparison via pokersolver
+          const Hand = require("pokersolver").Hand;
+          const h1 = Hand.solve(
+            [...holeCards, ...fullBoard].map(cardToPS),
+            getGameType(variant)
+          );
+          const h2 = Hand.solve(
+            [...oppHole, ...fullBoard].map(cardToPS),
+            getGameType(variant)
+          );
+          const winners = Hand.winners([h1, h2]);
+          if (winners.length === 1 && winners[0] === h2) {
+            heroBeatAll = false;
+            allTied = false;
+            break;
+          } else if (winners.length === 2) {
+            // Tied with this opponent, continue checking others
+          } else {
+            allTied = false;
+          }
+        } else {
+          allTied = false;
         }
       }
+
+      if (heroBeatAll && !allTied) {
+        heroWins++;
+      } else if (heroBeatAll && allTied) {
+        ties++;
+      }
     } catch {
-      // Skip invalid hand combinations (rare edge cases)
       continue;
     }
   }

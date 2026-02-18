@@ -1,5 +1,19 @@
-import type { Action, ActionOption, OutInfo, Street } from "./types";
+import type { Action, ActionOption, OutInfo, Position, Street } from "./types";
 import type { HandStrengthInfo } from "./hand-strength";
+
+// Position equity adjustments — late position plays wider, early position tighter
+function getPositionAdjustment(position: Position | null): number {
+  if (!position) return 0;
+  const adjustments: Record<Position, number> = {
+    UTG: 0.04,   // Need 4% more equity to act (tighter)
+    MP: 0.02,    // Need 2% more
+    CO: -0.02,   // Need 2% less (wider)
+    BTN: -0.04,  // Need 4% less (widest)
+    SB: 0.03,    // SB plays tight (out of position postflop)
+    BB: -0.02,   // BB defends wider (already invested)
+  };
+  return adjustments[position];
+}
 
 export interface Recommendation {
   action: Action;
@@ -12,16 +26,19 @@ export function getRecommendation(
   street: Street,
   outs: OutInfo[],
   totalCleanOuts: number,
-  handStrength?: HandStrengthInfo | null
+  handStrength?: HandStrengthInfo | null,
+  position?: Position | null
 ): Recommendation {
+  const posAdj = getPositionAdjustment(position ?? null);
+
   if (potOdds === null || potOdds === 0) {
-    // No bet to face
-    if (equity > 0.55) return { action: "raise", confidence: "strong" };
-    if (equity > 0.45) return { action: "raise", confidence: "moderate" };
+    // No bet to face — position adjusts thresholds
+    if (equity > 0.55 - posAdj) return { action: "raise", confidence: "strong" };
+    if (equity > 0.45 - posAdj) return { action: "raise", confidence: "moderate" };
     return { action: "check", confidence: "moderate" };
   }
 
-  const equityThreshold = potOdds;
+  const equityThreshold = potOdds + posAdj;
 
   if (equity > equityThreshold + 0.15) {
     return {
@@ -192,8 +209,10 @@ export function getTopActions(
   potOdds: number | null,
   street: Street,
   totalCleanOuts: number,
-  handStrength?: HandStrengthInfo | null
+  handStrength?: HandStrengthInfo | null,
+  position?: Position | null
 ): ActionOption[] {
+  const posAdj = getPositionAdjustment(position ?? null);
   const equityPct = (equity * 100).toFixed(1);
   const potOddsPct = potOdds ? (potOdds * 100).toFixed(1) : null;
   const options: ActionOption[] = [];
@@ -203,8 +222,8 @@ export function getTopActions(
 
   // --- RAISE ---
   if (noBet) {
-    if (equity > 0.45) {
-      const baseConf: "strong" | "moderate" = equity > 0.55 ? "strong" : "moderate";
+    if (equity > 0.45 - posAdj) {
+      const baseConf: "strong" | "moderate" = equity > 0.55 - posAdj ? "strong" : "moderate";
       options.push({
         action: "raise",
         label: "RAISE",
@@ -222,9 +241,9 @@ export function getTopActions(
       });
     }
   } else {
-    if (equity > (potOdds ?? 0) + 0.1) {
+    if (equity > (potOdds ?? 0) + 0.1 - posAdj) {
       const baseConf: "strong" | "moderate" =
-        equity > (potOdds ?? 0) + 0.2 ? "strong" : "moderate";
+        equity > (potOdds ?? 0) + 0.2 - posAdj ? "strong" : "moderate";
       options.push({
         action: "raise",
         label: "RAISE",
@@ -237,9 +256,9 @@ export function getTopActions(
 
   // --- CALL ---
   if (!noBet) {
-    if (equity >= (potOdds ?? 0)) {
+    if (equity >= (potOdds ?? 0) - posAdj) {
       const baseConf: "strong" | "moderate" =
-        equity > (potOdds ?? 0) + 0.05 ? "strong" : "moderate";
+        equity > (potOdds ?? 0) + 0.05 - posAdj ? "strong" : "moderate";
       options.push({
         action: "call",
         label: "CALL",
@@ -249,7 +268,7 @@ export function getTopActions(
       });
     } else if (
       totalCleanOuts >= 8 &&
-      equity > (potOdds ?? 0) - 0.08 &&
+      equity > (potOdds ?? 0) - 0.08 - posAdj &&
       (street === "flop" || street === "turn")
     ) {
       options.push({
@@ -276,9 +295,9 @@ export function getTopActions(
 
   // --- FOLD ---
   if (!noBet) {
-    if (equity < (potOdds ?? 0)) {
+    if (equity < (potOdds ?? 0) + posAdj) {
       const baseConf: "strong" | "marginal" =
-        equity < (potOdds ?? 0) - 0.1 ? "strong" : "marginal";
+        equity < (potOdds ?? 0) - 0.1 + posAdj ? "strong" : "marginal";
       options.push({
         action: "fold",
         label: "FOLD",

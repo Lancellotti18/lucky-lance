@@ -73,6 +73,8 @@ export default function AppShell() {
             potOdds: result.potOdds,
             recommendedAction: result.recommendedAction,
             handName: result.handName,
+            position: useGameStore.getState().position,
+            numPlayers: useGameStore.getState().numPlayers,
           }),
         });
 
@@ -221,8 +223,7 @@ export default function AppShell() {
       setAnalyzing(true);
 
       try {
-        const potSize = useGameStore.getState().potSize;
-        const amountToCall = useGameStore.getState().amountToCall;
+        const gameState = useGameStore.getState();
 
         const result = await fetch("/api/analyze-hand", {
           method: "POST",
@@ -231,9 +232,11 @@ export default function AppShell() {
             holeCards: hole,
             boardCards: board,
             variant,
-            potSize: potSize ?? undefined,
-            amountToCall: amountToCall ?? undefined,
+            potSize: gameState.potSize ?? undefined,
+            amountToCall: gameState.amountToCall ?? undefined,
             gtoMode,
+            position: gameState.position ?? undefined,
+            numPlayers: gameState.numPlayers,
           }),
         });
 
@@ -248,11 +251,11 @@ export default function AppShell() {
         // Fire AI explanation in parallel (non-blocking)
         fetchAiExplanation(analysisData);
 
-        // Brief delay for lightning animation
+        // Quick transition to results
         setTimeout(() => {
           setAnalyzing(false);
           setScreen("results");
-        }, 2500);
+        }, 800);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Analysis failed");
         setAnalyzing(false);
