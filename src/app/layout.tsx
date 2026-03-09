@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { Playfair_Display } from "next/font/google";
+import ThemeProvider from "@/components/ui/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -62,7 +63,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${playfair.variable} antialiased bg-casino-black text-casino-text`}
       >
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

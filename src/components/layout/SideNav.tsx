@@ -3,6 +3,8 @@
 import { motion, AnimatePresence } from "motion/react";
 import { useUIStore } from "@/stores/ui-store";
 import { useGameStore } from "@/stores/game-store";
+import { useAuthStore } from "@/stores/auth-store";
+import { useTheme } from "@/components/ui/ThemeProvider";
 import Select from "@/components/ui/Select";
 import Toggle from "@/components/ui/Toggle";
 import { VARIANT_LABELS } from "@/engine/types";
@@ -16,9 +18,15 @@ const VARIANT_OPTIONS = Object.entries(VARIANT_LABELS).map(
   })
 );
 
-export default function SideNav() {
-  const { isNavOpen, closeNav } = useUIStore();
+interface SideNavProps {
+  onSignOut?: () => void;
+}
+
+export default function SideNav({ onSignOut }: SideNavProps) {
+  const { isNavOpen, closeNav, setScreen } = useUIStore();
   const { variant, setVariant, gtoMode, setGtoMode, resetHand } = useGameStore();
+  const { user } = useAuthStore();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   return (
     <AnimatePresence>
@@ -74,13 +82,31 @@ export default function SideNav() {
                 />
                 <Toggle
                   label="Dark Mode"
-                  checked={true}
-                  onChange={() => {}}
+                  checked={theme === "dark"}
+                  onChange={toggleTheme}
                 />
               </div>
 
               {/* Divider */}
               <div className="border-t border-white/10 my-4" />
+
+              {/* User Info */}
+              {user && (
+                <div className="bg-casino-dark rounded-xl p-3 mb-4 border border-white/10">
+                  <p className="text-casino-text text-sm font-semibold">{user.firstName}</p>
+                  <p className="text-casino-muted text-xs mt-0.5">{user.email}</p>
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
+                    <span className="text-casino-muted text-xs capitalize">
+                      {user.founderStatus ? "👑 Founder" : user.subscriptionPlan.replace("_", " ")}
+                    </span>
+                    <span className="text-casino-muted text-xs">
+                      {user.monthlyUploadLimit === null
+                        ? "∞ uploads"
+                        : `${user.uploadCount}/${user.monthlyUploadLimit}`}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Menu Items */}
               <div className="space-y-1">
@@ -94,18 +120,28 @@ export default function SideNav() {
                 >
                   Reset Hand
                 </button>
-                <button
-                  className="w-full text-left px-3 py-2.5 text-casino-text text-sm rounded-lg hover:bg-white/5 transition-colors"
-                  onClick={closeNav}
-                >
-                  Settings
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2.5 text-casino-text text-sm rounded-lg hover:bg-white/5 transition-colors"
-                  onClick={closeNav}
-                >
-                  About
-                </button>
+                {user && user.subscriptionPlan !== "founder" && (
+                  <button
+                    className="w-full text-left px-3 py-2.5 text-casino-gold text-sm font-semibold rounded-lg hover:bg-casino-gold/10 transition-colors"
+                    onClick={() => {
+                      useUIStore.getState().setScreen("pricing");
+                      closeNav();
+                    }}
+                  >
+                    Upgrade Plan
+                  </button>
+                )}
+                {onSignOut && (
+                  <button
+                    className="w-full text-left px-3 py-2.5 text-casino-muted text-sm rounded-lg hover:bg-white/5 hover:text-casino-text transition-colors"
+                    onClick={() => {
+                      closeNav();
+                      onSignOut();
+                    }}
+                  >
+                    Sign Out
+                  </button>
+                )}
               </div>
 
               {/* Footer */}
@@ -114,7 +150,8 @@ export default function SideNav() {
                   Lucky Lance v0.1.0
                 </p>
                 <p className="text-casino-muted text-xs mt-1">
-                  Poker Decision Support
+                  Lucky Lance provides analysis for educational purposes only.
+                  Not responsible for gambling losses. 18+ only.
                 </p>
               </div>
             </div>

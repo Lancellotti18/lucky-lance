@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useUIStore } from "@/stores/ui-store";
 import { useGameStore } from "@/stores/game-store";
+import { useAuthStore } from "@/stores/auth-store";
+import type { AuthUser, PlanId } from "@/stores/auth-store";
 import { useCardRecognition } from "@/hooks/useCardRecognition";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import LaunchScreen from "@/components/launch/LaunchScreen";
@@ -16,10 +18,19 @@ import PotOddsInput from "@/components/input/PotOddsInput";
 import ManualCardInput from "@/components/input/CardSelector";
 import AnalysisLoader from "@/components/loading/AnalysisLoader";
 import ResultsScreen from "@/components/results/ResultsScreen";
+import AuthScreen from "@/components/auth/AuthScreen";
+import FoundersCodeScreen from "@/components/auth/FoundersCodeScreen";
+import PricingScreen from "@/components/pricing/PricingScreen";
+import PaymentScreen from "@/components/payment/PaymentScreen";
+import UploadLimitModal from "@/components/upload-limit/UploadLimitModal";
 import Button from "@/components/ui/Button";
 import Image from "next/image";
 import type { Card, AnalysisResult } from "@/engine/types";
 import { preprocessCardImage } from "@/lib/image-preprocessing";
+
+const FULL_SCREEN_SCREENS = new Set([
+  "launch", "auth", "foundersCode", "pricing", "payment", "uploadLimitReached",
+]);
 
 export default function AppShell() {
   const {
@@ -46,6 +57,8 @@ export default function AppShell() {
     gtoMode,
     resetHand,
   } = useGameStore();
+  const { user, setUser, setLoading, selectedPlan, selectedBillingCycle, setSelectedPlan, setSelectedBillingCycle } =
+    useAuthStore();
 
   const {
     recognize,
@@ -55,6 +68,77 @@ export default function AppShell() {
   } = useCardRecognition();
   const { analyze } = useAnalysis();
   const [aiExplanationLoading, setAiExplanationLoading] = useState(false);
+
+  // Session hydration on mount
+  useEffect(() => {
+    async function hydrate() {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/auth/session");
+        const data = await res.json();
+        if (data.user) {
+          setUser(data.user);
+          const u = data.user;
+          if (u.subscriptionPlan === "none" && !u.founderStatus) {
+            setScreen("foundersCode");
+          } else {
+            setScreen("main");
+          }
+        } else {
+          setScreen("auth");
+        }
+      } catch {
+        setScreen("auth");
+      } finally {
+        setLoading(false);
+      }
+    }
+    hydrate();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAuthSuccess = useCallback(
+    (userData: AuthUser) => {
+      setUser(userData);
+      setScreen("foundersCode");
+    },
+    [setUser, setScreen]
+  );
+
+  const handleFounderActivated = useCallback(async () => {
+    const res = await fetch("/api/auth/session");
+    const data = await res.json();
+    if (data.user) setUser(data.user);
+    setScreen("main");
+  }, [setUser, setScreen]);
+
+  const handleFounderSkip = useCallback(() => {
+    setScreen("pricing");
+  }, [setScreen]);
+
+  const handleSelectPlan = useCallback(
+    (plan: PlanId, billingCycle: "monthly" | "annual") => {
+      setSelectedPlan(plan);
+      setSelectedBillingCycle(billingCycle);
+      setScreen("payment");
+    },
+    [setSelectedPlan, setSelectedBillingCycle, setScreen]
+  );
+
+  const handlePaymentSuccess = useCallback(
+    async (_plan: string) => {
+      const res = await fetch("/api/auth/session");
+      const data = await res.json();
+      if (data.user) setUser(data.user);
+      setScreen("main");
+    },
+    [setUser, setScreen]
+  );
+
+  const handleSignOut = useCallback(async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    useAuthStore.getState().logout();
+    setScreen("auth");
+  }, [setScreen]);
 
   const fetchAiExplanation = useCallback(
     async (result: AnalysisResult) => {
@@ -96,9 +180,10 @@ export default function AppShell() {
     [variant, setAnalysisResult]
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   const handleLaunchComplete = useCallback(() => {
-    setScreen("main");
-  }, [setScreen]);
+    // Session hydration (useEffect above) handles routing after launch
+  }, []);
 
   const handleRecognizeAndAnalyze = useCallback(async () => {
     if (capturedImages.length === 0) return;
@@ -242,11 +327,31 @@ export default function AppShell() {
 
         if (!result.ok) {
           const err = await result.json();
+          if (err.code === "UPLOAD_LIMIT_REACHED") {
+            setAnalyzing(false);
+            setScreen("uploadLimitReached");
+            return;
+          }
+          if (err.code === "UNAUTHORIZED" || err.code === "SESSION_EXPIRED") {
+            useAuthStore.getState().logout();
+            setScreen("auth");
+            setAnalyzing(false);
+            return;
+          }
           throw new Error(err.error || "Analysis failed");
         }
 
         const analysisData = await result.json();
         setAnalysisResult(analysisData);
+
+        // Update upload count in auth store
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser) {
+          useAuthStore.getState().setUser({
+            ...currentUser,
+            uploadCount: currentUser.uploadCount + 1,
+          });
+        }
 
         // Fire AI explanation in parallel (non-blocking)
         fetchAiExplanation(analysisData);
@@ -318,6 +423,8 @@ export default function AppShell() {
     setScreen("manualInput");
   }, [setIsAddingBoardCards, setError, setScreen]);
 
+  const isFullScreen = FULL_SCREEN_SCREENS.has(screen);
+
   return (
     <div className="min-h-screen bg-casino-black">
       {/* Launch Screen */}
@@ -325,11 +432,50 @@ export default function AppShell() {
         <LaunchScreen onComplete={handleLaunchComplete} />
       )}
 
+      {/* Auth Screen */}
+      {screen === "auth" && (
+        <AuthScreen onSuccess={handleAuthSuccess} />
+      )}
+
+      {/* Founders Code Screen */}
+      {screen === "foundersCode" && (
+        <FoundersCodeScreen
+          firstName={user?.firstName || "there"}
+          onFounderActivated={handleFounderActivated}
+          onSkip={handleFounderSkip}
+        />
+      )}
+
+      {/* Pricing Screen */}
+      {screen === "pricing" && (
+        <PricingScreen onSelectPlan={handleSelectPlan} />
+      )}
+
+      {/* Payment Screen */}
+      {screen === "payment" && selectedPlan && (
+        <PaymentScreen
+          plan={selectedPlan}
+          billingCycle={selectedBillingCycle}
+          onSuccess={handlePaymentSuccess}
+          onBack={() => setScreen("pricing")}
+        />
+      )}
+
+      {/* Upload Limit Screen */}
+      {screen === "uploadLimitReached" && (
+        <UploadLimitModal
+          uploadCount={user?.uploadCount ?? 0}
+          monthlyLimit={user?.monthlyUploadLimit ?? 0}
+          onUpgrade={() => setScreen("pricing")}
+          onClose={() => setScreen("main")}
+        />
+      )}
+
       {/* Main App */}
-      {screen !== "launch" && (
+      {!isFullScreen && (
         <>
-          <Header />
-          <SideNav />
+          <Header onSignOut={handleSignOut} />
+          <SideNav onSignOut={handleSignOut} />
 
           <main className="pt-16 px-4 min-h-screen safe-area-bottom">
             <AnimatePresence mode="wait">
@@ -353,6 +499,11 @@ export default function AppShell() {
                     <h1 className="text-casino-red font-display text-2xl font-bold">
                       Lucky Lance
                     </h1>
+                    {user && (
+                      <p className="text-casino-muted text-xs">
+                        Welcome back, {user.firstName}
+                      </p>
+                    )}
                   </div>
 
                   {/* Camera placeholder */}

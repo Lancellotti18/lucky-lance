@@ -3,9 +3,15 @@
 import { cn } from "@/utils/cn";
 import Image from "next/image";
 import { useUIStore } from "@/stores/ui-store";
+import { useAuthStore } from "@/stores/auth-store";
 
-export default function Header() {
+interface HeaderProps {
+  onSignOut?: () => void;
+}
+
+export default function Header({ onSignOut }: HeaderProps) {
   const { toggleNav, isNavOpen } = useUIStore();
+  const { user } = useAuthStore();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 safe-area-top">
@@ -46,8 +52,16 @@ export default function Header() {
           />
         </div>
 
-        {/* Spacer for symmetry */}
-        <div className="w-10 h-10" />
+        {/* Upload count badge */}
+        {user && (
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-casino-dark rounded-lg border border-white/10">
+            <span className="text-casino-muted text-xs">
+              {user.monthlyUploadLimit === null
+                ? "∞"
+                : `${user.uploadCount}/${user.monthlyUploadLimit}`}
+            </span>
+          </div>
+        )}
       </div>
     </header>
   );

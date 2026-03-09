@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Card, PokerVariant, AnalysisResult, Position } from "@/engine/types";
+import { getSessionFromRequest } from "@/lib/session";
+import { supabaseAdmin } from "@/lib/supabase-server";
 import { validateCards } from "@/engine/validation";
 import { calculateEquity } from "@/engine/equity-calculator";
 import { calculateOuts, getTotalOuts } from "@/engine/outs-calculator";
@@ -14,6 +16,24 @@ import { analyzeWhatBeatsMe } from "@/engine/what-beats-me";
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth + upload limit check
+    const sessionUser = await getSessionFromRequest(request);
+    if (!sessionUser) {
+      return NextResponse.json(
+        { error: "Unauthorized", code: "UNAUTHORIZED" },
+        { status: 401 }
+      );
+    }
+    if (
+      sessionUser.monthly_upload_limit !== null &&
+      sessionUser.upload_count >= sessionUser.monthly_upload_limit
+    ) {
+      return NextResponse.json(
+        { error: "You've reached your monthly upload limit. Upgrade your plan or wait until your limit resets.", code: "UPLOAD_LIMIT_REACHED" },
+        { status: 402 }
+      );
+    }
+
     const body = await request.json();
     const {
       holeCards,
@@ -138,6 +158,13 @@ export async function POST(request: NextRequest) {
 
     // Generate explanation
     result.explanation = generateExplanation(result, gtoMode);
+
+    // Increment upload count (non-blocking)
+    supabaseAdmin
+      .from("users")
+      .update({ upload_count: sessionUser.upload_count + 1 })
+      .eq("id", sessionUser.id)
+      .then(() => {});
 
     return NextResponse.json(result);
   } catch (error) {

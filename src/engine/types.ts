@@ -116,13 +116,18 @@ export interface AnalysisResult {
 
 export type AppScreen =
   | "launch"
+  | "auth"
+  | "foundersCode"
+  | "pricing"
+  | "payment"
   | "main"
   | "camera"
   | "preview"
   | "potInput"
   | "loading"
   | "results"
-  | "manualInput";
+  | "manualInput"
+  | "uploadLimitReached";
 
 export const VARIANT_LABELS: Record<PokerVariant, string> = {
   texasHoldem: "Texas Hold'em",

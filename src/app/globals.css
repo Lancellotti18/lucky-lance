@@ -236,3 +236,14 @@ input, select, textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: #3a3a3a;
 }
+
+/* Light mode overrides */
+[data-theme="light"] {
+  --color-casino-black: #f0f0f0;
+  --color-casino-dark: #e0e0e0;
+  --color-casino-grey: #d0d0d0;
+  --color-casino-text: #1a1a1a;
+  --color-casino-muted: #555555;
+  background-color: #f0f0f0;
+  color: #1a1a1a;
+}
